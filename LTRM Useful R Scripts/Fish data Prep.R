@@ -1,21 +1,31 @@
 #Use LTRM fish data to summarize fyke and e-fishing data -- this will 
 #pull sampling data to get CPUE, species richness, and diversity indices
 
+#load required packages
 library(lubridate)
 library(tidyverse)
 
-#load data
-fish <- read.csv('Data/ltrm_fish_data.csv')
+#load data from gitHub - updated data file 30 Apr 2026 - should be complete through 2025
+data_url <- "https://raw.githubusercontent.com/patrickDNR/LTRM-Pool-8/refs/heads/main/LTRM%20data/ltrm_fish_data.csv"
+download.file(data_url, 'ltrm_fish_data.csv')
 
-#Test out coming up with diversity per sample...
-#get some stats per gear type...
+#load data into data frame
+fish <- read.csv('ltrm_fish_data.csv')
+
+#########Diversity indices per sample and by different gear types #########
+#Starting with large fyke nets - filter data using gear type "F"
+#Also want to specifiy "summary" code - 5 as normally completed sample, 
+# 7 includes psuedo shoreline
+# 8 is minor gear damage but not critical and didn't effect sample
 fyke <- fish %>%
   filter(gear == 'F') %>%
   filter(summary == 5 | summary == 8 | summary == 7)
 
+#make a vector of unique barcodes (i.e. sample)
 fyke.codes <- unique(fyke$barcode)
 
-#get some summary stats per code
+#get some summary stats per code 
+#loops through the unique samples to pull quantity data (i.e. number of fish per species per sample)
 fyke.stats <- c()
 for(i in 1:length(fyke.codes)){
   
@@ -42,11 +52,11 @@ for(i in 1:length(fyke.codes)){
 }
 
 #Now for each of these, get summary data on diversity - species richness
-#and Shannon index
-#Do this with a for loop and whatnot...
+#and Shannon index.
 codes <- unique(fyke.stats$code)
 
-#make a data frame for these 
+#Now use previously created data frame to calculate species richness (i.e. number of species present)
+# and shannon diversity index per sample
 fyke.sum <- c()
 for(i in 1:length(codes)){
   codei <- fyke.stats %>%
@@ -60,17 +70,18 @@ for(i in 1:length(codes)){
   x <- cbind(codei[1,8:ncol(codei)], richness = sp.rich, shannon = shannon)
   fyke.sum <- rbind(fyke.sum, x)
 }
-#Add "effort" for both
+
+#Add "effort" for both - calculate the number of days the net was set
 fyke.stats$sDateTime <- mdy_hm(paste(fyke.stats$sdate, fyke.stats$stime, sep = ' '))
 fyke.stats$fDateTime <- mdy_hm(paste(fyke.stats$fdate, fyke.stats$ftime, sep = ' '))
 
 fyke.stats$effort.days <- difftime(fyke.stats$fDateTime, fyke.stats$sDateTime, 
                                   units = 'days')
 
-#Calculate CPUE
+#Calculate Catch per unit effort (CPUE) as number caught/effort
 fyke.stats$CPUE_num.day <- fyke.stats$nums/as.numeric(fyke.stats$effort.days)
 
-#Now do the ame thing for mini-fykes
+#Now do the same procedure for mini-fykes (code "M") - also summary code 5, 7, 8
 mini <- fish %>%
   filter(gear == 'M') %>%
   filter(summary == 5 | summary == 8 | summary == 7)
@@ -105,7 +116,7 @@ for(i in 1:length(mini.codes)){
 
 #Now for each of these, get summary data on diversity - species richness
 #and Shannon index
-#Do this with a for loop and whatnot...
+
 codes <- unique(mini.stats$code)
 
 #make a data frame for these 
@@ -139,7 +150,7 @@ fyke.stats$year <- format(mdy(fyke.stats$sdate), '%Y')
 mini.sum$year <- format(mdy(mini.sum$sdate), '%Y')
 fyke.sum$year <- format(mdy(fyke.sum$sdate), '%Y')
 
-#Need to do the same thing for daytime electrofishing
+#Need to do the same thing for daytime electrofishing - gear code "D"
 buzz <- fish %>%
   filter(gear == 'D') %>%
   filter(summary == 5 | summary == 8 | summary == 7)
@@ -199,31 +210,7 @@ buzz.stats$CPUE_num.min <- buzz.stats$nums/as.numeric(buzz.stats$effmin)
 buzz.stats$year <- format(mdy(buzz.stats$sdate), '%Y')
 buzz.sum$year <- format(mdy(buzz.sum$sdate),'%Y')
 
-#load conversion table
-conv <- read.csv('Data/fish abbrev convert.csv')
 
-#combine with stat tables
-fyke.stats.trim <- left_join(fyke.stats, conv, by = c('fish.names' = 'Abbr')) %>%
-  select(Fishname, sdate, gear, zone15e, zone15n, temp, depth, do, vegd, CPUE_num.day) %>%
-  rename('CPUE' = 'CPUE_num.day') %>%
-  mutate(lab = 'CPUE (num/day)')
-mini.stats.trim <- left_join(mini.stats, conv, by = c('fish.names' = 'Abbr'))%>%
-  select(Fishname, sdate, gear, zone15e, zone15n, temp, depth, do, vegd, CPUE_num.day) %>%
-  rename('CPUE' = 'CPUE_num.day') %>%
-  mutate(lab = 'CPUE (num/day)')
-buzz.stats.trim <- left_join(buzz.stats, conv, by = c('fish.names' = 'Abbr'))%>%
-  select(Fishname, sdate, gear, zone15e, zone15n, temp, depth, do, vegd, CPUE_num.min) %>%
-  rename('CPUE' = 'CPUE_num.min') %>%
-  mutate(lab = 'CPUE (num/min)')
-
-#combine all stats together
-stats.all <- rbind(fyke.stats.trim, mini.stats.trim, buzz.stats.trim)
-
-#save these files somewhere
-write.csv(stats.all, 'Data/CPUE_all.csv')
-write.csv(fyke.stats, 'Data/Fyke_length_nums.csv')
-write.csv(fyke.sum, 'data/fyke_summary.csv')
-write.csv(mini.stats, 'data/miniFyke_length_nums.csv')
-write.csv(mini.sum, 'data/miniFyke_summary.csv')
-write.csv(buzz.stats, 'data/shocking_length_nums.csv')
-write.csv(buzz.sum, 'data/shocking_summary.csv')
+#Final data sets...
+#fyke net abundance and CPUE
+head(fyke.stats)
